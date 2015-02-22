@@ -1,0 +1,75 @@
+---
+title: "Machine Learning Class Project"
+author: "CJ"
+date: "Sunday, February 22, 2015"
+output: html_document
+---
+
+```{r}
+library(caret);library(ggplot2);library(randomForest)
+setwd("C:/Classes/Machine Learning")
+training<-read.csv("pml-training.csv")
+testing<-read.csv('pml-testing.csv')
+```
+
+The purpose of this document is to explain the creation of a machine learning algorithm that examples the training data provided and creates predictions for the test data.  First I will discuss how I cleaned the data.  Next I will explain why I decided to use the algorithm I did.  Then I will attempt to estimate the out of sample error using K fold cross validation.  Finally, I will discuss results and wrap up.
+
+The data set was large.  I recognized that there were a lot of numeric variables reported back from the wearable devices. However, there were a significant number of variables that had NA or blanks.  Instead of trying to impute them, I decided to disregard them if over half of the rows had NA or blank values.
+
+```{r}
+
+# Remove cols where greater than half measurements are NA or missing
+b<-NULL
+for (i in 1:ncol(training)){
+        a<-sum(is.na(training[,i]))+sum(training[,i]=="",na.rm=T)
+        if (a<nrow(training)/2) b<-c(b,i)       
+}
+
+training<-training[,b]
+colnames<-names(training[,8:59])
+testing<-testing[,colnames]
+```
+
+I decided to use princple component analysis to compress the number of variables into 5.  I chose 5 variables because I had 5 possible outcomes.  Next I decided to use the randomForest function because I had a myriad of variables and only 5 possible outcomes.
+
+
+
+Then I conducted K-fold cross validation in order to estimate the out of sample error rate.  This resulted in an error rate of 85.6%
+
+```{r}
+set.seed(1021)
+folds <-createFolds(y=training$classe,k=5,list=T,returnTrain=T)
+
+A<-data.frame(Fold=NULL,Accuracy=NULL)
+for (k in 1:5){ ## 13.3 seconds per iteration
+        ktrain<-training[folds[[k]],]
+        ktest<-training[-folds[[k]],]
+        
+        preProc <- preProcess(ktrain[,8:59],method='pca',pcaComp=5)
+        trainPC <- predict(preProc,ktrain[,8:59])
+        testPC <- predict(preProc,ktest[,8:59])
+        modelFit<-randomForest(ktrain$classe~.,data=trainPC)
+        predictions<- predict(modelFit,newdata=testPC)
+        accuracy<-sum(predictions==ktest$classe)/length(predictions)
+        B<-data.frame(Fold=paste0("Fold_",k),Accuracy=accuracy)
+        A<-rbind(A,B)
+}
+print(A)
+mean(A$Accuracy)
+```
+
+Finally, I tested the results on the test data and returned the following predictions:
+
+```{r}
+        
+preProc <- preProcess(training[,8:59],method='pca',pcaComp=5)
+trainPC <- predict(preProc,training[,8:59])
+modelFit<-randomForest(training$classe~.,data=trainPC)
+
+
+finaltestPC <- predict(preProc,testing)
+predictions<- predict(modelFit,newdata=finaltestPC)
+predictions
+```
+
+
